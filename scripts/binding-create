@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# name, function, runner (todo: input - now default is binding name, todo: output)
+curl -X POST -H "Content-Type: text/plain" -d $3 ":5323/bindings/$1?function=$2&runner=$3&output=$4"

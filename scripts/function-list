@@ -1,0 +1,3 @@
+#!/bin/bash
+
+curl :5323/functions
