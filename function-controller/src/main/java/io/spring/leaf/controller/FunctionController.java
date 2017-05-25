@@ -16,24 +16,31 @@
 
 package io.spring.leaf.controller;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
-import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.deployer.spi.app.AppDeployer;
 import org.springframework.cloud.deployer.spi.core.AppDefinition;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
+import org.springframework.cloud.stream.binder.Binder;
+import org.springframework.cloud.stream.binder.BinderFactory;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.rabbit.properties.RabbitConsumerProperties;
+import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.messaging.MessageChannel;
 import org.springframework.util.Assert;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.ReflectionUtils.FieldCallback;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,7 +55,7 @@ import io.spring.leaf.controller.repository.BindingRepository;
  * @author Mark Fisher
  */
 @RestController
-public class FunctionController implements InitializingBean {
+public class FunctionController {
 
 	@Autowired
 	private BindingRepository repository;
@@ -69,13 +76,8 @@ public class FunctionController implements InitializingBean {
 	@Autowired
 	private ResourceLoader resourceLoader;
 
-	private RabbitAdmin rabbitAdmin;
-
-	@Override
-	public void afterPropertiesSet() throws Exception {
-		// assumes local RabbitMQ for now
-		this.rabbitAdmin = new RabbitAdmin(new CachingConnectionFactory());
-	}
+	@Autowired
+	private BinderFactory binderFactory;
 
 	@GetMapping("/runners")
 	public String listRunners() {
@@ -152,9 +154,23 @@ public class FunctionController implements InitializingBean {
 			binding.setOutput(output);
 		}
 		this.repository.save(name, binding);
-		this.createInputQueue(binding.getInput());
+		this.createTopicForConsumer(binding.getInput(), "default");
 	}
 
+	@GetMapping("/topics")
+	public Set<String> listTopics() {
+		SortedSet<String> topics = new TreeSet<>();
+		for (String name : this.repository.names()) {
+			Binding binding = this.repository.get(name);
+			if (binding.getInput() != null) {
+				topics.add(binding.getInput());
+			}
+			if (binding.getOutput() != null) {
+				topics.add(binding.getOutput());
+			}
+		}
+		return topics;
+	}
 	@PostMapping("/events/{topic}")
 	public void publishEvent(@PathVariable String topic, @RequestBody String event) {
 		this.gateway.sendEvent(topic, event);
@@ -184,13 +200,22 @@ public class FunctionController implements InitializingBean {
 		this.runnerDeployments.get(runner).add(deploymentId);
 	}
 
-	// refactor to use binder-specific provisioning
-	private void createInputQueue(String bindingName) {
-		TopicExchange exchange = new TopicExchange("function-" + bindingName);
-		Queue queue = new Queue("function-" + bindingName + ".default");
-		org.springframework.amqp.core.Binding binding = BindingBuilder.bind(queue).to(exchange).with("*");
-		this.rabbitAdmin.declareExchange(exchange);
-		this.rabbitAdmin.declareQueue(queue);
-		this.rabbitAdmin.declareBinding(binding);
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	private void createTopicForConsumer(String topic, String group) {
+		Binder binder = this.binderFactory.getBinder("rabbit", MessageChannel.class);
+		final AtomicReference<Field> provisionerField = new AtomicReference<>();
+		ReflectionUtils.doWithFields(binder.getClass(), new FieldCallback() {
+
+			@Override
+			public void doWith(Field field) throws IllegalArgumentException, IllegalAccessException {
+				if (ProvisioningProvider.class.isAssignableFrom(field.getType())) {
+					field.setAccessible(true);
+					provisionerField.set(field);
+				}
+			}
+		});
+		ProvisioningProvider provisioner = (ProvisioningProvider) ReflectionUtils.getField(provisionerField.get(), binder);
+		provisioner.provisionConsumerDestination(topic, group,
+				new ExtendedConsumerProperties<RabbitConsumerProperties>(new RabbitConsumerProperties()));
 	}
 }

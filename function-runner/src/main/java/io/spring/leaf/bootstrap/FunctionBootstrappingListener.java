@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.spring.leaf.runner;
+package io.spring.leaf.bootstrap;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,21 +22,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.cloud.function.compiler.proxy.ByteCodeLoadingFunction;
 import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.binding.BindingService;
 import org.springframework.cloud.stream.messaging.Sink;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.Resource;
 
+import io.spring.leaf.invoker.FunctionConfiguration;
 import io.spring.leaf.invoker.FunctionInvokingProcessor;
 import io.spring.leaf.invoker.FunctionInvokingSink;
-import reactor.core.publisher.Flux;
 
 /**
  * @author Mark Fisher
@@ -49,31 +43,18 @@ public class FunctionBootstrappingListener {
 
 	@StreamListener(Sink.INPUT)
 	public void handle(Map<String, String> deploymentRequest) throws IOException {
-		this.bindingService.unbindConsumers("input");
+		this.bindingService.unbindConsumers(Sink.INPUT);
 		List<String> args = new ArrayList<>();
 		args.add("--spring.cloud.faas.function.resource=" + deploymentRequest.get("function"));
-		args.add("--spring.cloud.stream.bindings.input.destination=function-" + deploymentRequest.get("input"));
+		args.add("--spring.cloud.stream.bindings.input.destination=" + deploymentRequest.get("input"));
 		args.add("--spring.cloud.stream.bindings.input.group=default");
 		Class<?> functionInvokerClass = FunctionInvokingSink.class;
 		if (deploymentRequest.get("output") != null) {
-			args.add("--spring.cloud.stream.bindings.output.destination=function-" + deploymentRequest.get("output"));
+			args.add("--spring.cloud.stream.bindings.output.destination=" + deploymentRequest.get("output"));
 			functionInvokerClass = FunctionInvokingProcessor.class;
 		}
 		new SpringApplicationBuilder(functionInvokerClass, FunctionConfiguration.class)
 				.web(false) // parent?
 				.run(args.toArray(new String[args.size()]));
-	}
-
-	@Configuration
-	@ConditionalOnProperty("spring.cloud.faas.function.resource")
-	public static class FunctionConfiguration {
-
-		@Value("${spring.cloud.faas.function.resource}")
-		public Resource resource;
-
-		@Bean
-		public ByteCodeLoadingFunction<Flux<String>, Flux<String>> targetFunction() {
-			return new ByteCodeLoadingFunction<>(this.resource);
-		}
 	}
 }

@@ -19,6 +19,8 @@ package io.spring.leaf.runner;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
+import io.spring.leaf.bootstrap.FunctionBootstrappingListener;
+
 /**
  * @author Mark Fisher
  */

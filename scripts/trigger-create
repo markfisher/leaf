@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# topic, cron
+curl -X POST -H"Content-Type: text/plain" -d "$2" :5323/triggers/$1

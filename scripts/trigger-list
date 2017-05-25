@@ -1,0 +1,4 @@
+#!/bin/bash
+
+curl :5323/triggers
+

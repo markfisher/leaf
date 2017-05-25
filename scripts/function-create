@@ -1,4 +1,4 @@
 #!/bin/bash
 
 # function, code
-curl -X POST -H "Content-Type: text/plain" -d $2 :5323/functions/$1
+curl -X POST -H "Content-Type: text/plain" -d "$2" :5323/functions/$1

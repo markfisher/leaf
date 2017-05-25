@@ -42,8 +42,6 @@ public class FunctionGateway {
 
 	private static final String RUNNER_CHANNEL_PREFIX = "runner-";
 
-	private static final String FUNCTION_CHANNEL_PREFIX = "function-";
-
 	@Autowired
 	private BinderAwareChannelResolver resolver;
 
@@ -94,7 +92,7 @@ public class FunctionGateway {
 				this.deploy(binding);
 			}
 		}
-		MessageChannel channel = resolver.resolveDestination(FUNCTION_CHANNEL_PREFIX + topic);
+		MessageChannel channel = resolver.resolveDestination(topic);
 		channel.send(message);
 	}
 
