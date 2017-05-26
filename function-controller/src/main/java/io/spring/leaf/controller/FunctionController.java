@@ -17,28 +17,18 @@
 package io.spring.leaf.controller;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cloud.deployer.spi.app.AppDeployer;
-import org.springframework.cloud.deployer.spi.core.AppDefinition;
-import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.stream.binder.Binder;
 import org.springframework.cloud.stream.binder.BinderFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.rabbit.properties.RabbitConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.messaging.MessageChannel;
-import org.springframework.util.Assert;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.ReflectionUtils.FieldCallback;
 import org.springframework.util.StringUtils;
@@ -60,10 +50,6 @@ public class FunctionController {
 	@Autowired
 	private BindingRepository repository;
 
-	private final Map<String, Resource> runnerResources = new HashMap<>();
-
-	private final Map<String, List<String>> runnerDeployments = new HashMap<>();
-
 	@Autowired
 	private FunctionGateway gateway;
 
@@ -71,53 +57,34 @@ public class FunctionController {
 	private FunctionRegistryController registry;
 
 	@Autowired
-	private AppDeployer deployer;
-
-	@Autowired
-	private ResourceLoader resourceLoader;
+	private Deployer deployer;
 
 	@Autowired
 	private BinderFactory binderFactory;
 
 	@GetMapping("/runners")
 	public String listRunners() {
-		return StringUtils.collectionToCommaDelimitedString(this.runnerResources.keySet()) + "\n";
+		return this.deployer.getRunnerNames();
 	}
 
 	@GetMapping("/runners/{name}")
 	public String runnerStatus(@PathVariable String name) {
-		List<String> deploymentIds = this.runnerDeployments.get(name);
-		StringBuilder builder = new StringBuilder();
-		for (String deploymentId : deploymentIds) {
-			builder.append(deploymentId.replaceFirst("null\\.", ""));
-			builder.append("\n");
-		}
-		return builder.toString();
+		return this.deployer.getRunnerStatus(name);
 	}
 
 	@PostMapping("/runners/{name}")
 	public void createRunner(@PathVariable String name, @RequestBody String location) {
-		Resource resource = this.resourceLoader.getResource(location);
-		this.runnerResources.put(name, resource);
-		this.deployRunner(name);
+		this.deployer.deployRunner(name, location);
 	}
 
 	@PostMapping(value="/pools/runner/{name}/{count}") // todo: accept JSON body
-	public String incrementRunnerPool(@PathVariable String name, @PathVariable int count) {
-		for (int i = 0; i < count; i++) {
-			this.deployRunner(name);
-		}
-		return String.format("incremented pool for runner %s by %d\n", name, count);
+	public String scaleRunnerPool(@PathVariable String runner, @PathVariable int count) {
+		return this.deployer.scaleRunnerPool(runner, count);
 	}
 
 	@PostMapping(value="/pools/binding/{name}/{count}") // todo: accept JSON body
-	public String incrementFunctionPool(@PathVariable String name, @PathVariable int count) {
-		Binding binding = this.repository.get(name);
-		Assert.notNull(binding, "no such binding: " + name);
-		for (int i = 0; i < count; i++) {
-			this.deployRunner(binding.getRunner());
-		}
-		return this.gateway.scale(name, count);
+	public String scaleBindingPool(@PathVariable String bindingName, @PathVariable int count) {
+		return this.deployer.scaleBindingPool(bindingName, count);
 	}
 
 	@GetMapping("/functions")
@@ -183,21 +150,7 @@ public class FunctionController {
 
 	@PostMapping("/replies/{id}")
 	public String handleReply(@PathVariable String id, @RequestBody String reply) {
-		return this.gateway.reply(Long.parseLong(id), reply);
-	}
-
-	private void deployRunner(String runner) {
-		Resource resource = this.runnerResources.get(runner);
-		Map<String, String> properties = new HashMap<>();
-		properties.put("spring.cloud.deployer.group", "runner");
-		properties.put("spring.cloud.stream.bindings.input.destination", "runner-" + runner);
-		properties.put("spring.cloud.stream.bindings.input.group", "default");
-		this.runnerDeployments.putIfAbsent(runner, new ArrayList<String>());
-		int index = runnerDeployments.get(runner).size();
-		AppDefinition definition = new AppDefinition(runner + "-" + index, properties);
-		AppDeploymentRequest appDeploymentRequest = new AppDeploymentRequest(definition, resource);
-		String deploymentId = this.deployer.deploy(appDeploymentRequest);
-		this.runnerDeployments.get(runner).add(deploymentId);
+		return this.gateway.handleReply(Long.parseLong(id), reply);
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
@@ -217,5 +170,6 @@ public class FunctionController {
 		ProvisioningProvider provisioner = (ProvisioningProvider) ReflectionUtils.getField(provisionerField.get(), binder);
 		provisioner.provisionConsumerDestination(topic, group,
 				new ExtendedConsumerProperties<RabbitConsumerProperties>(new RabbitConsumerProperties()));
+		this.deployer.monitor(topic, binder);
 	}
 }
