@@ -29,7 +29,7 @@ Register a Function:
 
 Bind the Function to a Destination and Specify its Runner:
 ```
-./scripts/function-bind words uppercase myrunner
+./scripts/function-bind uppercase myrunner words
 ```
 
 Publish an Event:
@@ -44,8 +44,8 @@ HELLO WORLD
 ./scripts/function-create time "f->Flux.just(\"the time is: \"+new java.util.Date())"
 ./scripts/function-create log "f->f.log()"
 
-./scripts/function-bind pings time myrunner notifications
-./scripts/function-bind notifications log myrunner
+./scripts/function-bind time myrunner pings notifications
+./scripts/function-bind log myrunner notifications
 
 ./scripts/trigger-create pings "0/10 * * * * ?"
 ```
