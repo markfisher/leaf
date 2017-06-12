@@ -27,9 +27,9 @@ Register a Function:
 ./scripts/function-create uppercase "f->f.map(s->s.toString().toUpperCase())"
 ```
 
-Create a Binding:
+Bind the Function to a Destination and Specify its Runner:
 ```
-./scripts/binding-create words uppercase myrunner
+./scripts/function-bind words uppercase myrunner
 ```
 
 Publish an Event:
@@ -44,8 +44,8 @@ HELLO WORLD
 ./scripts/function-create time "f->Flux.just(\"the time is: \"+new java.util.Date())"
 ./scripts/function-create log "f->f.log()"
 
-./scripts/binding-create pings time myrunner notifications
-./scripts/binding-create notifications log myrunner
+./scripts/function-bind pings time myrunner notifications
+./scripts/function-bind notifications log myrunner
 
 ./scripts/trigger-create pings "0/10 * * * * ?"
 ```

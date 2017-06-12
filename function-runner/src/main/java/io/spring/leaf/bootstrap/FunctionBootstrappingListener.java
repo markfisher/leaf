@@ -43,7 +43,6 @@ public class FunctionBootstrappingListener {
 
 	@StreamListener(Sink.INPUT)
 	public void handle(Map<String, String> deploymentRequest) throws IOException {
-		this.bindingService.unbindConsumers(Sink.INPUT);
 		List<String> args = new ArrayList<>();
 		args.add("--spring.cloud.faas.function.resource=" + deploymentRequest.get("function"));
 		args.add("--spring.cloud.stream.bindings.input.destination=" + deploymentRequest.get("input"));
@@ -56,5 +55,6 @@ public class FunctionBootstrappingListener {
 		new SpringApplicationBuilder(functionInvokerClass, FunctionConfiguration.class)
 				.web(false) // parent?
 				.run(args.toArray(new String[args.size()]));
+		this.bindingService.unbindConsumers(Sink.INPUT);
 	}
 }

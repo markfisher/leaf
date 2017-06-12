@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# function, runner, input, (optional: output)
+curl -X POST -H "Content-Type: text/plain" -d $2 ":5323/bindings/$3?function=$1&runner=$2&output=$4"
